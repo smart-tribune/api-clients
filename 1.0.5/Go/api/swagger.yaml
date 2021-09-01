@@ -1,0 +1,2050 @@
+openapi: 3.0.1
+info:
+  title: Smart Tribune V2 API
+  description: "The purpose of this API is to allow developers to build front-end\
+    \ interfaces for displaying knowledge base data (Faq, Helpbox, Chatbot ...)\n\
+    ## Authorization and API Requests\nTo access the API, all requests need an api-token\
+    \ to be passed in the Authorization request header as a bearer token.\n**Authorization**:\
+    \ Bearer api-token\nYou can retrieve your api-token using the POST request to\
+    \ **/v1/auth**.\n\n## Rate Limiting\n\nWe currently limit the number of API requests\
+    \ per IP address on a specific window of 1s.\nWhen the rate limit is exceeded\
+    \ for a given API endpoint, the API will return either HTTP 429 Too Many Requests\
+    \ or HTTP 503 Service Unavailable response.\n\n### Find below Standard API rate\
+    \ limits per window:\n\n| Endpoints | User limit per window |\n|---|---|\n| POST\
+    \  */v1/auth* | 2 |\n| GET   */v1/knowledge-bases* | 2 |\n| POST  */v1/knowledge-bases/{id}/filtered/questions*\
+    \ | 10 |\n| POST  */v1/knowledge-bases/{id}/filtered/thematics* | 10 |\n| GET\
+    \   */v1/knowledge-bases/{id}/questions/{questionId}/channels/{channelId}/responses*\
+    \ | 10 |\n| POST  */v1/knowledge-bases/{id}/questions/{questionId}/responses/{responseId}/responses-satisfactions*\
+    \ | 2 |\n| GET   */v1/knowledge-bases/{id}/reasons* | 2 |\n| GET   */v1/knowledge-bases/{id}/reasons-comments*\
+    \ | 2 |\n| PATCH */v1/knowledge-bases/{id}/questions/{questionId}/responses/{responseId}/responses-satisfactions/{satisfactionId}*\
+    \ | 2 |\n| GET */v1/knowledge-bases/{id}/contacts* | 2 |\n"
+  contact:
+    email: devs@smart-tribune.com
+  version: 1.0.5
+servers:
+- url: https://api-gateway.app.smart-tribune.com/
+tags:
+- name: Authentication
+- name: Filtered API
+  description: Performance oriented API to fetch list of items
+- name: Generic API
+paths:
+  /v1/auth:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate through our API
+      description: Allow user to authenticate through our API and retrieve a JWT token
+        that need to be used within all requests
+      requestBody:
+        description: Authenticate user and retrieve JWT token
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Auth'
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+  /v1/knowledge-bases/{id}/filtered/questions:
+    post:
+      tags:
+      - Filtered API
+      summary: Fetch a (list of) Question(s) depend on specified Filters
+      parameters:
+      - name: id
+        in: path
+        description: The knowledgebase Id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: page
+        in: query
+        description: Page identifier
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        description: Items per page
+        required: false
+        style: form
+        explode: true
+        schema:
+          maximum: 200
+          type: integer
+          example: 25
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      requestBody:
+        description: "**Example of payloads to fetch** :\n\n * Promoted Questions\
+          \ within Smart FAQ Channel\n     ```javascript\n      {\n        \"channel\"\
+          : \"faq\",\n        \"promoted\": true\n      }\n     ```\n\n * Frequent\
+          \ Questions within Smart FAQ Channel\n     ```javascript\n     {\n     \
+          \  \"channel\": \"faq\",\n       \"frequent\": true\n     }\n     ```\n\n\
+          \ * Related questions within Smart FAQ channel for thematic systemName \"\
+          how-to-make-booking-987\" and Question id 19\n     ```javascript\n     {\n\
+          \       \"channel\" : \"faq\",\n       \"excludedQuestions\" : [19],\n \
+          \      \"searchFilters\": [\n           {\n               \"name\": \"thematic-system-name-859\"\
+          ,\n               \"type\": \"thematic\"\n           }\n       ]\n     }\n\
+          \     ```\n\n * Search results within Smart FAQ Channel\n     ```javascript\n\
+          \     {\n       \"channel\": \"faq\",\n       \"query\": \"my search query\"\
+          \n       \"useSuggester\": true\n     }\n     ```\n\n * Single Question\
+          \ by slug\n     ```javascript\n     {\n       \"channel\": \"faq\",\n  \
+          \     \"questionSlug\": \"my-question-slug\"\n     }\n     ```\n\n * Questions\
+          \ filtered by Thematic with slug \"my-thematic\"\n     ```javascript\n \
+          \    {\n       \"channel\": \"faq\",\n       \"searchFilters\": [\n    \
+          \       {\n               \"slug\": \"my-thematic-slug\",\n            \
+          \   \"type\": \"thematic\"\n           }\n       ]\n     }\n     ```\n \
+          \ * Questions filtered using Tags with name \"my-tag-1\" OR \"my-tag-2\"\
+          \n     ```javascript\n     {\n       \"channel\": \"faq\",\n       \"searchFilters\"\
+          : [\n           {\n               \"name\": \"my-tag-1\",\n            \
+          \   \"type\": \"tag\"\n           },\n           {\n               \"name\"\
+          : \"my-tag-2\",\n               \"type\": \"tag\"\n           }\n      \
+          \ ],\n       \"searchFiltersOperators\": [\n          { \"tag\" : \"OR\"\
+          \ }\n        ]\n     }\n     ```\n * Questions filtered by Thematic with\
+          \ systemName \"tag-system-name-568\" AND Tag with systemName \"my-tag-14\"\
+          \n     ```javascript\n     {\n       \"channel\": \"faq\",\n       \"searchFilters\"\
+          : [\n           {\n               \"name\": \"thematic-system-name-859\"\
+          ,\n               \"type\": \"thematic\"\n           },\n           {\n\
+          \               \"name\": \"tag-system-name-568\",\n               \"type\"\
+          : \"tag\"\n           }\n       ]\n     }\n     ```\n"
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilteredQuestionsPayload'
+        required: false
+      responses:
+        "200":
+          description: A filtered Question list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_1'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/filtered/thematics:
+    post:
+      tags:
+      - Filtered API
+      summary: Fetch a (list of) Thematic(s) depend on specified Filters
+      parameters:
+      - name: id
+        in: path
+        description: The knowledgebase Id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: page
+        in: query
+        description: Page identifier
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        description: Items per page
+        required: false
+        style: form
+        explode: true
+        schema:
+          maximum: 200
+          type: integer
+          example: 25
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      requestBody:
+        description: "**Example of payloads to fetch** :\n\n  * Thematics filtered\
+          \ by SystemName \"how-to-make-booking-987\"\n     ```javascript\n     {\n\
+          \       \"channel\": \"faq\",\n       \"searchFilters\": [\n           {\n\
+          \               \"name\": \"how-to-make-booking-987\",\n               \"\
+          type\": \"thematic\"\n           }\n       ]\n     }\n      ```\n\n  * Thematics\
+          \ filtered by slug \"my-thematic\"\n     ```javascript\n     {\n       \"\
+          channel\": \"faq\",\n       \"searchFilters\": [\n           {\n       \
+          \        \"slug\": \"my-thematic-slug\",\n               \"type\": \"thematic\"\
+          \n           }\n       ]\n     }\n      ```\n"
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilteredThematicsPayload'
+        required: false
+      responses:
+        "200":
+          description: A filtered Thematics list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_2'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases:
+    get:
+      tags:
+      - Generic API
+      summary: Fetch allowed Knowledge bases
+      parameters:
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      responses:
+        "200":
+          description: Allowed Knowledge bases list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_3'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/questions/{questionId}/channels/{channelId}/responses:
+    get:
+      tags:
+      - Generic API
+      summary: Fetch Response related to a specified Question for a specific Channel
+      parameters:
+      - name: id
+        in: path
+        description: The Knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: questionId
+        in: path
+        description: The Question id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: channelId
+        in: path
+        description: The Channel id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      responses:
+        "200":
+          description: The Response to the specified Question for a specific Channel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_4'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/questions/{questionId}/responses/{responseId}/responses-satisfactions:
+    post:
+      tags:
+      - Generic API
+      summary: Post a Response Satisfaction on a specified Response
+      parameters:
+      - name: id
+        in: path
+        description: The knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: questionId
+        in: path
+        description: The Question id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: responseId
+        in: path
+        description: The Response id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/responseId_responsessatisfactions_body'
+      responses:
+        "200":
+          description: Response Satisfaction object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_5'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/reasons:
+    get:
+      tags:
+      - Generic API
+      summary: Fetch available negative vote Reasons
+      parameters:
+      - name: id
+        in: path
+        description: The Knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      responses:
+        "200":
+          description: A list of Reasons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_6'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/reason-comments:
+    get:
+      tags:
+      - Generic API
+      summary: Fetch available comments for negative vote Reasons
+      parameters:
+      - name: id
+        in: path
+        description: The Knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      - name: startDate
+        in: query
+        description: Start Date in yyyy-mm-dd format. Comments fetched are created
+          at startDate (between 00:00:00 and 23:59:59)
+        required: true
+        style: form
+        explode: true
+        schema:
+          type: string
+          example: 2021-06-12
+      - name: channel
+        in: query
+        description: The channel name of the responses affected by comments
+        required: true
+        style: form
+        explode: true
+        schema:
+          type: string
+          example: faq
+      - name: extended
+        in: query
+        description: "used to display additional information : thematics list and\
+          \ response content associated to the question"
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: boolean
+          example: true
+      responses:
+        "200":
+          description: A list of Comments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_7'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/questions/{questionId}/responses/{responseId}/responses-satisfactions/{satisfactionId}:
+    patch:
+      tags:
+      - Generic API
+      summary: Update a Response Satisfaction on a specified Response to provide a
+        Reason
+      parameters:
+      - name: id
+        in: path
+        description: The knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: questionId
+        in: path
+        description: The Question id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: responseId
+        in: path
+        description: The Response id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: satisfactionId
+        in: path
+        description: The Response satisfaction id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/responsessatisfactions_satisfactionId_body'
+      responses:
+        "200":
+          description: Response satisfaction object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_8'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+  /v1/knowledge-bases/{id}/contacts:
+    get:
+      tags:
+      - Generic API
+      summary: Fetch available Contact methods
+      parameters:
+      - name: id
+        in: path
+        description: The Knowledgebase id that needs to be fetched.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: integer
+      - name: Accept-Language
+        in: header
+        description: Language locale to filter api results
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          example: fr
+      responses:
+        "200":
+          description: A list of Contacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_9'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        "403":
+          description: Authorization information is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        "404":
+          description: The specified resource was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        "429":
+          description: Rate limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TooManyRequestError'
+        "503":
+          description: Service unavailable OR Rate limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+      security:
+      - bearerAuth: []
+components:
+  schemas:
+    Auth:
+      required:
+      - apiKey
+      - apiSecret
+      type: object
+      properties:
+        apiKey:
+          type: string
+          description: API Key
+          example: fc5e038d38a57032085441e7fe7010b0
+        apiSecret:
+          type: string
+          description: API Secret
+          example: 6ec691bb4195f541374adafcb2484aad
+    FilteredQuestionsPayload:
+      type: object
+      properties:
+        channel:
+          type: string
+          example: faq
+          enum:
+          - faq
+          - push
+          - bot
+        promoted:
+          type: boolean
+          example: false
+        frequent:
+          type: boolean
+          example: false
+        query:
+          maxLength: 255
+          type: string
+          example: How to finalize my baking
+        useSuggester:
+          type: boolean
+          example: true
+        excludedQuestions:
+          type: array
+          items:
+            type: integer
+        questionSlug:
+          pattern: "^[a-z0-9]+(-?[a-z0-9]+)*$"
+          type: string
+          example: my-question-slug
+        searchFilters:
+          type: array
+          items:
+            anyOf:
+            - $ref: '#/components/schemas/SearchFiltersThematicName'
+            - $ref: '#/components/schemas/SearchFiltersThematicSlug'
+            - $ref: '#/components/schemas/SearchFiltersTagName'
+        searchFiltersOperators:
+          type: array
+          items:
+            anyOf:
+            - $ref: '#/components/schemas/searchFiltersOperatorsTag'
+            - $ref: '#/components/schemas/searchFiltersOperatorsThematic'
+        limit:
+          maximum: 200
+          type: integer
+          example: 50
+    FilteredThematicsPayload:
+      type: object
+      properties:
+        channel:
+          type: string
+          example: faq
+          enum:
+          - faq
+          - push
+          - bot
+        promoted:
+          type: boolean
+          example: false
+        frequent:
+          type: boolean
+          example: false
+        excludedQuestions:
+          type: array
+          items:
+            type: integer
+        questionSlug:
+          pattern: "^[a-z0-9]+(-?[a-z0-9]+)*$"
+          type: string
+          example: my-question-slug
+        searchFilters:
+          type: array
+          items:
+            anyOf:
+            - $ref: '#/components/schemas/SearchFiltersThematicName'
+            - $ref: '#/components/schemas/SearchFiltersThematicSlug'
+            - $ref: '#/components/schemas/SearchFiltersTagName'
+        limit:
+          maximum: 200
+          type: integer
+          example: 50
+    SearchFiltersThematicName:
+      required:
+      - name
+      - type
+      type: object
+      properties:
+        type:
+          type: string
+          example: thematic
+        name:
+          type: string
+          example: thematic-system-name-859
+    SearchFiltersThematicSlug:
+      required:
+      - slug
+      - type
+      type: object
+      properties:
+        type:
+          type: string
+          example: thematic
+        slug:
+          type: string
+          example: my-thematic-slug
+    SearchFiltersTagName:
+      required:
+      - name
+      - type
+      type: object
+      properties:
+        type:
+          type: string
+          example: tag
+        name:
+          type: string
+          example: tag-system-name-568
+    searchFiltersOperatorsTag:
+      required:
+      - tag
+      type: object
+      properties:
+        tag:
+          type: string
+          example: OR
+    searchFiltersOperatorsThematic:
+      required:
+      - thematic
+      type: object
+      properties:
+        thematic:
+          type: string
+          example: OR
+    Meta:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 25
+        currentItems:
+          type: integer
+          example: 25
+        totalItems:
+          type: integer
+          example: 151
+        offset:
+          type: integer
+          example: 1
+        currentPage:
+          type: integer
+          example: 1
+        numberPage:
+          type: integer
+          example: 7
+      example:
+        currentItems: 25
+        totalItems: 151
+        offset: 1
+        numberPage: 7
+        limit: 25
+        currentPage: 1
+    MetaWithQuery:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 25
+        currentItems:
+          type: integer
+          example: 25
+        totalItems:
+          type: integer
+          example: 151
+        offset:
+          type: integer
+          example: 1
+        currentPage:
+          type: integer
+          example: 1
+        numberPage:
+          type: integer
+          example: 7
+        originalQuery:
+          type: string
+          example: How to finalize my baking
+        executedQuery:
+          type: string
+          example: How to finalize my booking
+      example:
+        currentItems: 25
+        totalItems: 151
+        offset: 1
+        executedQuery: How to finalize my booking
+        numberPage: 7
+        limit: 25
+        originalQuery: How to finalize my baking
+        currentPage: 1
+    FilteredQuestionsData:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1874
+        title:
+          type: string
+          example: This is the title of the Question
+        slug:
+          type: string
+          example: this-is-slug-of-question
+        metaTitle:
+          type: string
+          example: This is a custom meta title
+        metaDescription:
+          type: string
+          example: This is a custom meta description
+        thematics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Thematic'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        contacts:
+          type: array
+          items:
+            type: integer
+            example: 4
+        linkedQuestion:
+          $ref: '#/components/schemas/FilteredQuestionsData_linkedQuestion'
+      example:
+        linkedQuestion:
+          id: 2086
+          title: This is the title of the linked question
+          slug: this-is-slug-of-linked-question
+        thematics:
+        - name: my-thematic-198
+          description: This is the description of the Thematic with id 198
+          id: 198
+          position: 10
+          title: My thematic
+          parentId: 4
+          slug: my-thematic
+        - name: my-thematic-198
+          description: This is the description of the Thematic with id 198
+          id: 198
+          position: 10
+          title: My thematic
+          parentId: 4
+          slug: my-thematic
+        metaTitle: This is a custom meta title
+        id: 1874
+        title: This is the title of the Question
+        metaDescription: This is a custom meta description
+        slug: this-is-slug-of-question
+        contacts:
+        - 4
+        - 4
+        tags:
+        - name: my-tag-14
+          description: This is the description of the Tag with id 14
+          id: 14
+          title: My tag
+        - name: my-tag-14
+          description: This is the description of the Tag with id 14
+          id: 14
+          title: My tag
+    KnowledgeBase:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        name:
+          type: string
+          example: Smart Tribune internal HelpCenter
+        account:
+          type: integer
+          example: 4
+        languages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Language'
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Channel'
+      example:
+        languages:
+        - id: 2
+          locale: fr
+        - id: 2
+          locale: fr
+        channels:
+        - systemName: faq
+          name: Smart FAQ
+          id: 1
+        - systemName: faq
+          name: Smart FAQ
+          id: 1
+        name: Smart Tribune internal HelpCenter
+        id: 12
+        account: 4
+    Thematic:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 198
+        name:
+          type: string
+          example: my-thematic-198
+        description:
+          type: string
+          example: This is the description of the Thematic with id 198
+        title:
+          type: object
+          example: My thematic
+        parentId:
+          type: integer
+          nullable: true
+          example: 4
+        position:
+          type: integer
+          example: 10
+        slug:
+          type: string
+          example: my-thematic
+      example:
+        name: my-thematic-198
+        description: This is the description of the Thematic with id 198
+        id: 198
+        position: 10
+        title: My thematic
+        parentId: 4
+        slug: my-thematic
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 14
+        name:
+          type: string
+          example: my-tag-14
+        description:
+          type: string
+          example: This is the description of the Tag with id 14
+        title:
+          type: object
+          example: My tag
+      example:
+        name: my-tag-14
+        description: This is the description of the Tag with id 14
+        id: 14
+        title: My tag
+    Response:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 16
+        questionId:
+          type: integer
+          example: 14
+        channel:
+          $ref: '#/components/schemas/Channel'
+        content:
+          $ref: '#/components/schemas/Content'
+      example:
+        questionId: 14
+        channel:
+          systemName: faq
+          name: Smart FAQ
+          id: 1
+        id: 16
+        content:
+          images:
+          - id: 156
+            url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+          - id: 156
+            url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+          htmlBody: <p>This is the content of the response.</p><p>lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum <img src='https://uploads.app.smart-tribune.com/accounts/9999/knowledgeBase/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png'
+            /> lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum
+            lorem ipsum lorem ipsum</p>
+          id: 156
+          body: This is the content of the response. lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum
+          locale: fr
+          status: published
+    Channel:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Smart FAQ
+        systemName:
+          type: string
+          example: faq
+      example:
+        systemName: faq
+        name: Smart FAQ
+        id: 1
+    Language:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        locale:
+          type: string
+          example: fr
+      example:
+        id: 2
+        locale: fr
+    Content:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 156
+        body:
+          type: string
+          example: This is the content of the response. lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum
+        htmlBody:
+          type: string
+          example: <p>This is the content of the response.</p><p>lorem ipsum lorem
+            ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+            ipsum lorem ipsum <img src='https://uploads.app.smart-tribune.com/accounts/9999/knowledgeBase/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png'
+            /> lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum
+            lorem ipsum lorem ipsum</p>
+        locale:
+          type: string
+          example: fr
+        status:
+          type: string
+          example: published
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+      example:
+        images:
+        - id: 156
+          url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+        - id: 156
+          url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+        htmlBody: <p>This is the content of the response.</p><p>lorem ipsum lorem
+          ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+          ipsum lorem ipsum <img src='https://uploads.app.smart-tribune.com/accounts/9999/knowledgeBase/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png'
+          /> lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum
+          lorem ipsum lorem ipsum</p>
+        id: 156
+        body: This is the content of the response. lorem ipsum lorem ipsum lorem ipsum
+          lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum
+          lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum
+          lorem ipsum lorem ipsum
+        locale: fr
+        status: published
+    Image:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 156
+        url:
+          type: string
+          example: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+      example:
+        id: 156
+        url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+    Reason:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 6
+        value:
+          type: string
+          example: Does not answer to the question
+        locale:
+          type: string
+          example: fr
+        knowledgeBaseId:
+          type: integer
+          example: 2
+      example:
+        id: 6
+        knowledgeBaseId: 2
+        locale: fr
+        value: Does not answer to the question
+    ReasonComment:
+      type: object
+      properties:
+        date:
+          type: string
+          example: 2021-06-16 10:37:36
+        comment:
+          type: string
+          example: Very bad response content !
+        questionTitle:
+          type: string
+          example: This is the title of the question
+        questionId:
+          type: integer
+          example: 28
+        reasonTitle:
+          type: string
+          example: Does not answer to the question
+        thematics:
+          type: string
+          example: "thematic 1, thematic2"
+        responseContent:
+          type: string
+          example: this is the content of the response
+      example:
+        date: 2021-06-16 10:37:36
+        questionId: 28
+        questionTitle: This is the title of the question
+        reasonTitle: Does not answer to the question
+        thematics: "thematic 1, thematic2"
+        comment: Very bad response content !
+        responseContent: this is the content of the response
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 4
+        systemName:
+          type: string
+          example: contact-phone-4
+        name:
+          type: string
+          example: VIP Phone contact
+        locale:
+          type: string
+          example: fr
+        method:
+          type: string
+          example: phone
+        knowledgeBaseId:
+          type: integer
+          example: 2
+        contactConfiguration:
+          $ref: '#/components/schemas/contactConfiguration'
+      example:
+        systemName: contact-phone-4
+        method: phone
+        name: VIP Phone contact
+        contactConfiguration:
+          channels:
+          - faq
+          - faq
+          phone: "0102030405"
+          description: "Our support center is open from 24/24, 7/7"
+          title: Contact us by phone
+          isActive: true
+          applyAllQuestions: false
+          tags:
+          - tag-1
+          - tag-1
+        id: 4
+        knowledgeBaseId: 2
+        locale: fr
+    contactConfiguration:
+      type: object
+      properties:
+        phone:
+          type: string
+          example: "0102030405"
+        title:
+          type: string
+          example: Contact us by phone
+        description:
+          type: string
+          example: "Our support center is open from 24/24, 7/7"
+        applyAllQuestions:
+          type: boolean
+          example: false
+        isActive:
+          type: boolean
+          example: true
+        channels:
+          type: array
+          items:
+            type: string
+            example: faq
+        tags:
+          type: array
+          items:
+            type: string
+            example: tag-1
+      example:
+        channels:
+        - faq
+        - faq
+        phone: "0102030405"
+        description: "Our support center is open from 24/24, 7/7"
+        title: Contact us by phone
+        isActive: true
+        applyAllQuestions: false
+        tags:
+        - tag-1
+        - tag-1
+    UnauthorizedError:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: Unauthorized
+        uuid:
+          type: string
+          example: 4d0ba294-0369-11e9-8eb2-f2801f1b9fd1
+    NotFoundError:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: App\Entity\EntityName object not found
+        uuid:
+          type: string
+          example: 4d0ba284-0369-11e9-8eb2-f2801f9b9fd1
+    ForbiddenError:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: Forbidden
+        uuid:
+          type: string
+          example: 4d0ba284-0369-11e9-8eb2-f2801f9b9fd1
+    TooManyRequestError:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: Too Many Request
+        uuid:
+          type: string
+          example: 4d0ba284-0369-11e9-8eb2-f2801f9b9fd1
+    ServiceUnavailableError:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: Service Unavailable
+        uuid:
+          type: string
+          example: 4d0ba284-0369-11e9-8eb2-f2801f9b9fd1
+    Error:
+      required:
+      - message
+      - uuid
+      type: object
+      properties:
+        message:
+          type: string
+          example: Error
+        uuid:
+          type: string
+          example: 4d0ba294-0369-11e9-8eb2-f2801f1b9fd1
+    inline_response_200:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+      example:
+        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+    inline_response_200_1:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/MetaWithQuery'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilteredQuestionsData'
+      example:
+        data:
+        - linkedQuestion:
+            id: 2086
+            title: This is the title of the linked question
+            slug: this-is-slug-of-linked-question
+          thematics:
+          - name: my-thematic-198
+            description: This is the description of the Thematic with id 198
+            id: 198
+            position: 10
+            title: My thematic
+            parentId: 4
+            slug: my-thematic
+          - name: my-thematic-198
+            description: This is the description of the Thematic with id 198
+            id: 198
+            position: 10
+            title: My thematic
+            parentId: 4
+            slug: my-thematic
+          metaTitle: This is a custom meta title
+          id: 1874
+          title: This is the title of the Question
+          metaDescription: This is a custom meta description
+          slug: this-is-slug-of-question
+          contacts:
+          - 4
+          - 4
+          tags:
+          - name: my-tag-14
+            description: This is the description of the Tag with id 14
+            id: 14
+            title: My tag
+          - name: my-tag-14
+            description: This is the description of the Tag with id 14
+            id: 14
+            title: My tag
+        - linkedQuestion:
+            id: 2086
+            title: This is the title of the linked question
+            slug: this-is-slug-of-linked-question
+          thematics:
+          - name: my-thematic-198
+            description: This is the description of the Thematic with id 198
+            id: 198
+            position: 10
+            title: My thematic
+            parentId: 4
+            slug: my-thematic
+          - name: my-thematic-198
+            description: This is the description of the Thematic with id 198
+            id: 198
+            position: 10
+            title: My thematic
+            parentId: 4
+            slug: my-thematic
+          metaTitle: This is a custom meta title
+          id: 1874
+          title: This is the title of the Question
+          metaDescription: This is a custom meta description
+          slug: this-is-slug-of-question
+          contacts:
+          - 4
+          - 4
+          tags:
+          - name: my-tag-14
+            description: This is the description of the Tag with id 14
+            id: 14
+            title: My tag
+          - name: my-tag-14
+            description: This is the description of the Tag with id 14
+            id: 14
+            title: My tag
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          executedQuery: How to finalize my booking
+          numberPage: 7
+          limit: 25
+          originalQuery: How to finalize my baking
+          currentPage: 1
+    inline_response_200_2:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Thematic'
+      example:
+        data:
+        - name: my-thematic-198
+          description: This is the description of the Thematic with id 198
+          id: 198
+          position: 10
+          title: My thematic
+          parentId: 4
+          slug: my-thematic
+        - name: my-thematic-198
+          description: This is the description of the Thematic with id 198
+          id: 198
+          position: 10
+          title: My thematic
+          parentId: 4
+          slug: my-thematic
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    inline_response_200_3:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeBase'
+      example:
+        data:
+        - languages:
+          - id: 2
+            locale: fr
+          - id: 2
+            locale: fr
+          channels:
+          - systemName: faq
+            name: Smart FAQ
+            id: 1
+          - systemName: faq
+            name: Smart FAQ
+            id: 1
+          name: Smart Tribune internal HelpCenter
+          id: 12
+          account: 4
+        - languages:
+          - id: 2
+            locale: fr
+          - id: 2
+            locale: fr
+          channels:
+          - systemName: faq
+            name: Smart FAQ
+            id: 1
+          - systemName: faq
+            name: Smart FAQ
+            id: 1
+          name: Smart Tribune internal HelpCenter
+          id: 12
+          account: 4
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    inline_response_200_4:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Response'
+      example:
+        data:
+        - questionId: 14
+          channel:
+            systemName: faq
+            name: Smart FAQ
+            id: 1
+          id: 16
+          content:
+            images:
+            - id: 156
+              url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+            - id: 156
+              url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+            htmlBody: <p>This is the content of the response.</p><p>lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum <img src='https://uploads.app.smart-tribune.com/accounts/9999/knowledgeBase/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png'
+              /> lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum</p>
+            id: 156
+            body: This is the content of the response. lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum
+            locale: fr
+            status: published
+        - questionId: 14
+          channel:
+            systemName: faq
+            name: Smart FAQ
+            id: 1
+          id: 16
+          content:
+            images:
+            - id: 156
+              url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+            - id: 156
+              url: https://uploads.app.smart-tribune.com/accounts/9999/knowlegebases/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png
+            htmlBody: <p>This is the content of the response.</p><p>lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum <img src='https://uploads.app.smart-tribune.com/accounts/9999/knowledgeBase/9999/c3d2282f-d9b2-4cfb-9c40-07d3d1aa50d4.png'
+              /> lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum</p>
+            id: 156
+            body: This is the content of the response. lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem ipsum lorem
+              ipsum lorem ipsum lorem ipsum
+            locale: fr
+            status: published
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    responseId_responsessatisfactions_body:
+      required:
+      - positive
+      type: object
+      properties:
+        positive:
+          type: boolean
+          example: true
+    inline_response_200_5:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        positive:
+          type: boolean
+          example: true
+        locale:
+          type: string
+          example: fr
+        responseId:
+          type: integer
+          example: 4
+        reasonId:
+          type: string
+          nullable: true
+      example:
+        reasonId: reasonId
+        id: 1
+        positive: true
+        locale: fr
+        responseId: 4
+    inline_response_200_6:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reason'
+      example:
+        data:
+        - id: 6
+          knowledgeBaseId: 2
+          locale: fr
+          value: Does not answer to the question
+        - id: 6
+          knowledgeBaseId: 2
+          locale: fr
+          value: Does not answer to the question
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    inline_response_200_7:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReasonComment'
+      example:
+        data:
+        - date: 2021-06-16 10:37:36
+          questionId: 28
+          questionTitle: This is the title of the question
+          reasonTitle: Does not answer to the question
+          thematics: "thematic 1, thematic2"
+          comment: Very bad response content !
+          responseContent: this is the content of the response
+        - date: 2021-06-16 10:37:36
+          questionId: 28
+          questionTitle: This is the title of the question
+          reasonTitle: Does not answer to the question
+          thematics: "thematic 1, thematic2"
+          comment: Very bad response content !
+          responseContent: this is the content of the response
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    responsessatisfactions_satisfactionId_body:
+      required:
+      - reason
+      type: object
+      properties:
+        reason:
+          type: integer
+          example: 6
+    inline_response_200_8:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        positive:
+          type: boolean
+          example: true
+        locale:
+          type: string
+          example: fr
+        responseId:
+          type: integer
+          example: 4
+        reason:
+          $ref: '#/components/schemas/Reason'
+      example:
+        reason:
+          id: 6
+          knowledgeBaseId: 2
+          locale: fr
+          value: Does not answer to the question
+        id: 1
+        positive: true
+        locale: fr
+        responseId: 4
+    inline_response_200_9:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+      example:
+        data:
+        - systemName: contact-phone-4
+          method: phone
+          name: VIP Phone contact
+          contactConfiguration:
+            channels:
+            - faq
+            - faq
+            phone: "0102030405"
+            description: "Our support center is open from 24/24, 7/7"
+            title: Contact us by phone
+            isActive: true
+            applyAllQuestions: false
+            tags:
+            - tag-1
+            - tag-1
+          id: 4
+          knowledgeBaseId: 2
+          locale: fr
+        - systemName: contact-phone-4
+          method: phone
+          name: VIP Phone contact
+          contactConfiguration:
+            channels:
+            - faq
+            - faq
+            phone: "0102030405"
+            description: "Our support center is open from 24/24, 7/7"
+            title: Contact us by phone
+            isActive: true
+            applyAllQuestions: false
+            tags:
+            - tag-1
+            - tag-1
+          id: 4
+          knowledgeBaseId: 2
+          locale: fr
+        meta:
+          currentItems: 25
+          totalItems: 151
+          offset: 1
+          numberPage: 7
+          limit: 25
+          currentPage: 1
+    FilteredQuestionsData_linkedQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2086
+        title:
+          type: string
+          example: This is the title of the linked question
+        slug:
+          type: string
+          example: this-is-slug-of-linked-question
+      example:
+        id: 2086
+        title: This is the title of the linked question
+        slug: this-is-slug-of-linked-question
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnauthorizedError'
+    Forbidden:
+      description: Authorization information is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ForbiddenError'
+    TooManyRequest:
+      description: Rate limit has been reached.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TooManyRequestError'
+    ServiceUnavailable:
+      description: Service unavailable OR Rate limit has been reached
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ServiceUnavailableError'
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotFoundError'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
